@@ -1,36 +1,52 @@
 # Implementation, Plan, Design Constraints, Design Approach
 
-## Problem
-Build core logic for Google Calendar day view where overlapping events appear side-by-side instead of stacking over each other.
+## Problem Statement
+Implement Google Calendar-like scheduling logic where overlapping events are rendered side-by-side without visual collision, now supporting:
+- `DAY`
+- `WeekDAY`
+- `WorkingWeeks`
+- `WholeWeek`
 
-## Implementation Summary
-- Convert event times (`HH:mm`) to minutes from midnight.
-- Sort events by `startMin`, tie-break by `endMin`.
-- Sweep through events to detect overlap groups.
-- Assign smallest available column index to each event.
-- Track maximum columns per overlap group.
-- Apply `left` and `width` using `column` and `totalColumns`.
+## Implementation Scope
+- Time normalization (`HH:mm` -> minutes)
+- Per-range clipping (`dayStart/dayEnd`)
+- Overlap grouping
+- Dynamic column assignment
+- Width and left calculations
+- Filters by status
+- Edit event fields (title, day, time, status)
+- Day and whole-week rendering modes
 
-## Plan
-1. Define event input and positioned event models.
-2. Build `toMinutes` utility.
-3. Sort normalized events.
-4. Implement sweep-line overlap processing.
-5. Reuse freed columns when events end.
-6. Finalize each overlap group with shared `totalColumns`.
-7. Compute geometry (`top`, `height`, `leftPct`, `widthPct`).
-8. Validate tricky overlap cases.
+## Step-by-Step Plan
+1. Define core models (`CalendarEventInput`, `PositionedEvent`, enums).
+2. Implement range resolver from active view mode.
+3. Filter events by status.
+4. Normalize events with clipped start/end boundaries.
+5. Sort by `startMin`, tie-break by `endMin`.
+6. Run sweep-line overlap algorithm.
+7. Reuse free columns and finalize group widths.
+8. Map time to pixels (`top`, `height`) and percentages (`leftPct`, `widthPct`).
+9. Render day or week layout based on selected mode.
+10. Integrate edit/update actions and reactivity.
 
-## Design Constraints
-- Large event lists should be handled efficiently.
-- Same-start and near-boundary times must remain deterministic.
-- Layout must avoid visual collision.
-- Width math must be consistent within an overlap group.
-- Minimum height should keep short events clickable/readable.
+## Constraints
+- Deterministic behavior for ties and boundary handoff.
+- No event should render outside selected timeline range.
+- Logic should be reusable across day and week views.
+- Algorithm must remain understandable for interview discussion.
 
-## Design Approach
-- Use sweep-line with active-event tracking.
-- Maintain a reusable pool of free columns.
-- Group events by connectivity in overlap timeline.
-- Freeze `totalColumns` when a group closes (active set becomes empty).
-- Keep this logic UI-framework agnostic so it can power web/mobile clients.
+## Approach Used
+- Separate **policy** (view range, filters) from **algorithm** (overlap layout).
+- Reuse same layout engine for:
+  - single timeline (`DAY`, `WeekDAY`, `WorkingWeeks`)
+  - each day column in `WholeWeek`
+- Keep logic signal-driven so UI updates are automatic and predictable.
+
+## Multi-Component Refactor
+Implementation is now split into reusable standalone components:
+- `CalendarToolbarComponent`
+- `EventEditPanelComponent`
+- `DayViewComponent`
+- `WeekViewComponent`
+
+`App` is now the orchestration layer (state + algorithm), while child components focus on rendering and user interactions.

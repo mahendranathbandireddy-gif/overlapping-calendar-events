@@ -1,35 +1,47 @@
 # What Interviewers Focus On in This Question
 
-## 1. Problem Decomposition
-- Do you separate normalization, overlap detection, and rendering math?
-- Do you explain assumptions (inclusive/exclusive boundaries)?
+## 1. Core Interval Correctness
+- Can you detect overlaps reliably?
+- Can you handle `end == next start` correctly?
+- Can you reason about chain and nested overlaps?
 
-## 2. Correctness of Overlap Logic
-- Same start time events
-- Chain overlaps (A overlaps B, B overlaps C)
-- Boundary handoff (`end == next start`)
-- Nested intervals
+## 2. Decomposition Quality
+- Do you split policy (mode/filter) from overlap algorithm?
+- Is the solution reusable for day and week views?
 
-## 3. Data Structure Choice
-- Why sort by start time?
-- How active overlap set is tracked?
-- How free columns are reused efficiently?
+## 3. Data Structure and Pattern Rationale
+- Why sorted arrays + active set + free column pool?
+- Can you explain design-pattern choices beyond naming them?
 
-## 4. Complexity Awareness
-- Can you derive `O(n log n)` due to sorting?
-- Can you discuss optimizations for high-density schedules?
+## 4. Algorithm Clarity
+Interviewers expect a crisp story:
+1. normalize
+2. sort
+3. sweep
+4. assign columns
+5. finalize widths
+6. render
 
-## 5. Width and Column Math
-- Correct `left` and `width` percentages per overlap group
-- Stable columns when events start/finish
+## 5. Edge Cases
+- events partially outside range
+- zero/negative durations
+- same start times
+- heavy overlap density
 
-## 6. Code Quality
-- Readable function boundaries
-- Deterministic behavior and testability
-- Handling invalid or edge input cleanly
+## 6. Practical Product Thinking
+- multiple timeline modes
+- editing and filtering integration
+- readable cards under crowded layouts
 
-## 7. Communication
-Interviewers reward candidates who say:
-- "I treat overlap using sweep-line with active intervals."
-- "I close a group when active events become zero, then assign common width."
-- "UI is secondary; correctness of interval logic is primary."
+## 7. Communication Signal
+Strong candidates explain tradeoffs and invariants clearly:
+- "Active set holds only currently overlapping intervals."
+- "Group widths are finalized only when overlap chain closes."
+- "View mode changes range policy, not core overlap algorithm."
+
+## 9. Componentization Quality
+Interviewers value when candidates move from a monolith to modular UI:
+- clear component boundaries
+- input/output contracts
+- business logic retained in one container
+- render components kept dumb and reusable

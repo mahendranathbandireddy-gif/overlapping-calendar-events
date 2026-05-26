@@ -1,124 +1,97 @@
-# Code Explanation: Google Calendar Day View Logic
+# Code Explanation: Step-by-Step Decode with Approach
 
-This document explains the implementation in:
+This explains how the implementation works in:
 - `/src/app/app.ts`
 - `/src/app/app.html`
 - `/src/app/app.scss`
 
-## 1. Objective of the code
-The code renders a day-view calendar where overlapping events are placed in separate columns so they appear side-by-side rather than visually overlapping.
+## Approach Summary
+Use one reusable overlap engine and feed it different timeline policies (`DAY`, `WeekDAY`, `WorkingWeeks`, `WholeWeek`).
 
-## 2. `app.ts` walkthrough
+## Step 1: Capture state
+`app.ts` stores:
+- view mode
+- status filter
+- editable draft state
+- raw event list
 
-## 2.1 Data models
-`CalendarEventInput` stores raw event data:
-- `id`, `title`
-- `start`, `end` in `HH:mm`
+These are all signals so downstream computed values update automatically.
 
-`PositionedEvent` extends each event with layout metadata:
-- `startMin`, `endMin` (minutes)
-- `column`, `totalColumns`
-- `top`, `height`, `leftPct`, `widthPct`
+## Step 2: Resolve timeline policy
+`dayRange` computed maps view mode to boundaries:
+- `DAY`: 0 to 1440
+- `WeekDAY`: 480 to 1260
+- `WorkingWeeks`: 540 to 1080
 
-These values are enough for absolute-position rendering in the UI.
+`WholeWeek` still uses same daily range but renders 7 day columns.
 
-## 2.2 Component configuration
-Important fields:
-- `dayStart = 8 * 60`, `dayEnd = 21 * 60`
-- `pxPerMinute = 1.1`
-- `rawEvents` signal with mock data
-- `positionedEvents` computed signal using `layoutEvents(...)`
+## Step 3: Filter events
+`filteredEvents` computed applies status filter before layout.
 
-`positionedEvents()` is the core derived output used by the template.
+## Step 4: Normalize and clip
+In `layoutEvents(events, dayStart, dayEnd)`:
+- convert each `start/end` to minutes
+- clamp to selected range
+- remove invalid intervals (`end <= start`)
 
-## 2.3 Time-axis generation
-`hours` computed signal generates labels from 08:00 to 21:00 in 60-minute steps using `toHHMM(...)`.
+This prevents boundary overflow in rendering.
 
-## 2.4 Core algorithm: `layoutEvents(events)`
-This method does all overlap + column logic.
+## Step 5: Sort intervals
+Sort by `startMin`, then `endMin` for deterministic traversal.
 
-### Step A: Normalize + sort
-Each event is converted to:
-- `startMin = toMinutes(start)`
-- `endMin = toMinutes(end)`
+## Step 6: Sweep-line overlap detection
+Maintain:
+- `active[]`: currently overlapping intervals
+- `freeCols[]`: released columns
+- `nextCol`: next new column number
 
-Then events are sorted by:
-1. `startMin`
-2. `endMin` (tie-break)
+For each event:
+1. release ended events from `active`
+2. reclaim their columns to `freeCols`
+3. assign smallest free column, or new one
+4. push current event into `active`
 
-This gives deterministic processing order.
+## Step 7: Group close and width finalization
+When active set becomes empty, the overlap chain is complete:
+- assign `totalColumns` for that group
+- set `leftPct = column / totalColumns`
+- set `widthPct = 1 / totalColumns`
 
-### Step B: Sweep with active overlaps
-Runtime structures:
-- `active`: events currently overlapping current start time
-- `freeCols`: released columns that can be reused
-- `nextCol`: next unused column index
+This guarantees side-by-side non-overlapping card lanes.
 
-For each incoming event:
-1. Remove ended events from `active` (`endMin <= current.startMin`)
-2. Return their columns to `freeCols`
-3. Reuse smallest free column, else allocate `nextCol++`
-4. Insert current event into `active`
-
-This avoids unnecessary growth in column count.
-
-### Step C: Overlap group finalization
-A group ends when `active.length === 0`.
-
-When group closes (`closeGroup(...)`):
-- assign `totalColumns` to every event in the group
-- compute `leftPct = (column / totalColumns) * 100`
-- compute `widthPct = 100 / totalColumns`
-
-This ensures all events in the same overlap cluster share consistent width rules.
-
-### Step D: Vertical placement
+## Step 8: Convert to geometry
 For each event:
 - `top = (startMin - dayStart) * pxPerMinute`
-- `height = (endMin - startMin) * pxPerMinute`
-- `height` clamped to min `24`px for readability
+- `height = max(24, (endMin - startMin) * pxPerMinute)`
 
-## 2.5 Utility methods
-- `toMinutes(hhmm)` converts `HH:mm` to absolute minutes.
-- `toHHMM(total)` formats minutes back to `HH:mm` for axis labels.
+## Step 9: Day vs WholeWeek render
+- Non-week mode: single time-axis + one grid
+- `WholeWeek`: 7 columns (`Mon..Sun`), each day runs same `layoutEvents` independently
 
-## 3. `app.html` walkthrough
+## Step 10: Edit and reflow
+When user edits title/day/time/status:
+- `saveEdit()` updates source event
+- computed pipeline re-runs
+- UI re-renders with updated overlap layout
 
-Template structure:
-1. Header with round context.
-2. Legend for quick metadata.
-3. Day view split into:
-- `time-axis` (hour ticks)
-- `grid` (event card canvas)
+## Why this implementation is clean
+- One algorithm, many views
+- Clear separation of policy and layout logic
+- Deterministic and interview-explainable
+- Easy to extend for recurrence/timezone handling
 
-Event cards are rendered with absolute styles:
-- `[style.top.px]="event.top"`
-- `[style.height.px]="event.height"`
-- `[style.left.%]="event.leftPct"`
-- `[style.width.%]="event.widthPct"`
+## 11. Multi-Component Implementation (How it is implemented)
+Step-by-step:
+1. Created shared model types in `models.calendar.ts`.
+2. Extracted toolbar UI into `CalendarToolbarComponent`.
+3. Extracted edit form into `EventEditPanelComponent`.
+4. Extracted day renderer into `DayViewComponent`.
+5. Extracted week renderer into `WeekViewComponent`.
+6. Kept overlap algorithm and state in `App` container.
+7. Connected child outputs to parent handlers.
+8. Passed computed render data as inputs to children.
 
-Result: overlap is visually resolved into side-by-side columns.
-
-## 4. `app.scss` walkthrough
-
-Styling decisions:
-- Two-column layout: time axis + event grid.
-- Grid uses `position: relative`; event cards use `position: absolute`.
-- Subtle background stripes simulate hourly bands.
-- Event cards have compact readable typography.
-- Responsive breakpoint reduces time-axis width on smaller screens.
-
-## 5. Why this solution works
-- Correctness: overlap detection is explicit and deterministic.
-- Efficiency: sort once + single forward sweep.
-- Maintainability: logic isolated in one method with clear helper utilities.
-- Interview-fit: demonstrates algorithmic clarity before UI complexity.
-
-## 6. Edge cases handled
-- Same start times
-- Chain overlaps (`A-B`, `B-C`)
-- Boundary transitions (`end == next start`)
-- Dense overlap windows with column reuse
-
-## 7. One-line summary
-`Normalize -> sort -> sweep active overlaps -> assign/reuse columns -> finalize group widths -> render absolute positions.`
+Result:
+- lower coupling
+- easier independent testing
+- cleaner interview narrative of architecture evolution

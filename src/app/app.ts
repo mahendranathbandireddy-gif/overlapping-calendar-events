@@ -1,68 +1,96 @@
-import { CommonModule } from '@angular/common';
-import { Component, computed, signal } from '@angular/core';
-
-type EventStatus = 'Scheduled' | 'Completed' | 'Cancelled';
-type FilterStatus = 'All' | EventStatus;
-
-interface CalendarEventInput {
-  id: string;
-  title: string;
-  start: string; // HH:mm
-  end: string;   // HH:mm
-  status: EventStatus;
-}
-
-interface PositionedEvent extends CalendarEventInput {
-  startMin: number;
-  endMin: number;
-  column: number;
-  totalColumns: number;
-  top: number;
-  height: number;
-  leftPct: number;
-  widthPct: number;
-}
+import { Component, ViewEncapsulation, computed, signal } from '@angular/core';
+import {
+  CalendarEventInput,
+  EventStatus,
+  FilterStatus,
+  PositionedEvent,
+  ViewMode,
+  WeekDay
+} from './models.calendar';
+import { CalendarToolbarComponent } from './components/calendar-toolbar.component';
+import { DayViewComponent } from './components/day-view.component';
+import { EventEditPanelComponent } from './components/event-edit-panel.component';
+import { WeekViewComponent } from './components/week-view.component';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule],
+  imports: [CalendarToolbarComponent, DayViewComponent, EventEditPanelComponent, WeekViewComponent],
   templateUrl: './app.html',
-  styleUrl: './app.scss'
+  styleUrl: './app.scss',
+  encapsulation: ViewEncapsulation.None
 })
 export class App {
-  readonly dayStart = 8 * 60;
-  readonly dayEnd = 21 * 60;
   readonly pxPerMinute = 1.1;
-  readonly dayHeightPx = (this.dayEnd - this.dayStart) * this.pxPerMinute;
-  readonly hourSlotPx = 60 * this.pxPerMinute;
+  readonly weekDays: WeekDay[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  readonly workingWeekDays: WeekDay[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
-  readonly filterOptions: FilterStatus[] = ['All', 'Scheduled', 'Completed', 'Cancelled'];
+  readonly viewModes: ViewMode[] = ['DAY', 'WeekDAY', 'WorkingWeeks', 'WholeWeek'];
+  readonly activeView = signal<ViewMode>('WholeWeek');
+
   readonly activeFilter = signal<FilterStatus>('All');
   readonly editingEventId = signal<string | null>(null);
-  readonly editDraft = signal<{ title: string; start: string; end: string; status: EventStatus } | null>(null);
+  readonly editDraft = signal<{ title: string; day: WeekDay; start: string; end: string; status: EventStatus } | null>(
+    null
+  );
 
   readonly rawEvents = signal<CalendarEventInput[]>([
-    { id: 'e1', title: 'Daily Standup', start: '09:00', end: '09:45', status: 'Completed' },
-    { id: 'e2', title: 'Design Review', start: '09:15', end: '10:30', status: 'Scheduled' },
-    { id: 'e3', title: '1:1 Sync', start: '10:00', end: '11:00', status: 'Scheduled' },
-    { id: 'e4', title: 'API Planning', start: '11:10', end: '12:00', status: 'Cancelled' },
-    { id: 'e5', title: 'Lunch', start: '12:15', end: '13:00', status: 'Completed' },
-    { id: 'e6', title: 'Roadmap', start: '12:20', end: '14:00', status: 'Scheduled' },
-    { id: 'e7', title: 'Interview Debrief', start: '12:35', end: '13:15', status: 'Scheduled' },
-    { id: 'e8', title: 'Focus Block', start: '15:00', end: '17:00', status: 'Scheduled' },
-    { id: 'e9', title: 'Quick Sync', start: '15:45', end: '16:10', status: 'Completed' },
-    { id: 'e10', title: 'Wrap-up', start: '17:10', end: '18:00', status: 'Scheduled' }
+    { id: 'e1', title: 'Daily Standup', day: 'Mon', start: '09:00', end: '09:45', status: 'Completed' },
+    { id: 'e2', title: 'Design Review', day: 'Mon', start: '09:15', end: '10:30', status: 'Scheduled' },
+    { id: 'e3', title: '1:1 Sync', day: 'Tue', start: '10:00', end: '11:00', status: 'Scheduled' },
+    { id: 'e4', title: 'API Planning', day: 'Tue', start: '11:10', end: '12:00', status: 'Cancelled' },
+    { id: 'e5', title: 'Lunch', day: 'Wed', start: '12:15', end: '13:00', status: 'Completed' },
+    { id: 'e6', title: 'Roadmap', day: 'Wed', start: '12:20', end: '14:00', status: 'Scheduled' },
+    { id: 'e7', title: 'Interview Debrief', day: 'Thu', start: '12:35', end: '13:15', status: 'Scheduled' },
+    { id: 'e8', title: 'Focus Block', day: 'Fri', start: '15:00', end: '17:00', status: 'Scheduled' },
+    { id: 'e9', title: 'Quick Sync', day: 'Sat', start: '15:45', end: '16:10', status: 'Completed' },
+    { id: 'e10', title: 'Wrap-up', day: 'Sun', start: '17:10', end: '18:00', status: 'Scheduled' },
+    { id: 'e11', title: 'Planning', day: 'Mon', start: '14:00', end: '15:30', status: 'Scheduled' },
+    { id: 'e12', title: 'Team Retro', day: 'Fri', start: '10:30', end: '11:30', status: 'Scheduled' }
   ]);
+
+  readonly dayRange = computed(() => {
+    const mode = this.activeView();
+    if (mode === 'DAY') {
+      return { start: 0, end: 24 * 60, label: '00:00 - 24:00' };
+    }
+    if (mode === 'WorkingWeeks') {
+      return { start: 9 * 60, end: 18 * 60, label: '09:00 - 18:00' };
+    }
+    return { start: 8 * 60, end: 21 * 60, label: '08:00 - 21:00' };
+  });
+
+  readonly dayStart = computed(() => this.dayRange().start);
+  readonly dayEnd = computed(() => this.dayRange().end);
+  readonly dayHeightPx = computed(() => (this.dayEnd() - this.dayStart()) * this.pxPerMinute);
+  readonly hourSlotPx = computed(() => 60 * this.pxPerMinute);
 
   readonly filteredEvents = computed(() => {
     const f = this.activeFilter();
+    const events = this.rawEvents();
     if (f === 'All') {
-      return this.rawEvents();
+      return events;
     }
-    return this.rawEvents().filter((e) => e.status === f);
+    return events.filter((e) => e.status === f);
   });
 
-  readonly positionedEvents = computed(() => this.layoutEvents(this.filteredEvents()));
+  readonly positionedEvents = computed(() =>
+    this.layoutEvents(this.filteredEvents(), this.dayStart(), this.dayEnd())
+  );
+
+  readonly weekPositionedEvents = computed(() => {
+    const events = this.filteredEvents();
+    const start = this.dayStart();
+    const end = this.dayEnd();
+    const days = this.activeView() === 'WorkingWeeks' ? this.workingWeekDays : this.weekDays;
+    return days.map((d) => ({
+      day: d,
+      events: this.layoutEvents(
+        events.filter((e) => e.day === d),
+        start,
+        end
+      )
+    }));
+  });
 
   readonly statusCounts = computed(() => {
     const events = this.rawEvents();
@@ -76,11 +104,17 @@ export class App {
 
   readonly hours = computed(() => {
     const arr: string[] = [];
-    for (let m = this.dayStart; m <= this.dayEnd; m += 60) {
+    for (let m = this.dayStart(); m <= this.dayEnd(); m += 60) {
       arr.push(this.toHHMM(m));
     }
     return arr;
   });
+
+  readonly isWeekLayout = computed(() => this.activeView() === 'WholeWeek' || this.activeView() === 'WorkingWeeks');
+
+  setView(mode: ViewMode): void {
+    this.activeView.set(mode);
+  }
 
   setFilter(filter: FilterStatus): void {
     this.activeFilter.set(filter);
@@ -90,6 +124,7 @@ export class App {
     this.editingEventId.set(event.id);
     this.editDraft.set({
       title: event.title,
+      day: event.day,
       start: event.start,
       end: event.end,
       status: event.status
@@ -116,7 +151,14 @@ export class App {
 
     const next = this.rawEvents().map((e) =>
       e.id === eventId
-        ? { ...e, title: draft.title.trim() || e.title, start: draft.start, end: draft.end, status: draft.status }
+        ? {
+            ...e,
+            title: draft.title.trim() || e.title,
+            day: draft.day,
+            start: draft.start,
+            end: draft.end,
+            status: draft.status
+          }
         : e
     );
 
@@ -124,24 +166,24 @@ export class App {
     this.cancelEdit();
   }
 
-  updateDraft<K extends keyof NonNullable<ReturnType<typeof this.editDraft>>>(key: K, value: NonNullable<ReturnType<typeof this.editDraft>>[K]): void {
+  onEditPatch(payload: { key: 'title' | 'day' | 'start' | 'end' | 'status'; value: string }): void {
     const draft = this.editDraft();
     if (!draft) {
       return;
     }
-    this.editDraft.set({ ...draft, [key]: value });
+    this.editDraft.set({ ...draft, [payload.key]: payload.value });
   }
 
   trackByEventId(_: number, event: PositionedEvent): string {
     return event.id;
   }
 
-  private layoutEvents(events: CalendarEventInput[]): PositionedEvent[] {
+  private layoutEvents(events: CalendarEventInput[], dayStart: number, dayEnd: number): PositionedEvent[] {
     const normalized = events
       .map((e) => ({
         ...e,
-        startMin: Math.max(this.dayStart, this.toMinutes(e.start)),
-        endMin: Math.min(this.dayEnd, this.toMinutes(e.end))
+        startMin: Math.max(dayStart, this.toMinutes(e.start)),
+        endMin: Math.min(dayEnd, this.toMinutes(e.end))
       }))
       .filter((e) => e.endMin > e.startMin)
       .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
@@ -152,7 +194,6 @@ export class App {
     let nextCol = 0;
 
     const out: PositionedEvent[] = [];
-
     let groupStart = 0;
     let groupMaxCols = 0;
 
@@ -181,17 +222,17 @@ export class App {
       }
 
       freeCols.sort((a, b) => a - b);
-      const col = freeCols.length > 0 ? freeCols.shift()! : nextCol++;
+      const col = freeCols.length > 0 ? freeCols.shift() : nextCol++;
 
-      active.push({ endMin: event.endMin, col });
+      active.push({ endMin: event.endMin, col: col! });
       groupMaxCols = Math.max(groupMaxCols, nextCol);
 
-      const top = Math.max(0, event.startMin - this.dayStart) * this.pxPerMinute;
+      const top = (event.startMin - dayStart) * this.pxPerMinute;
       const height = Math.max(24, (event.endMin - event.startMin) * this.pxPerMinute);
 
       out.push({
         ...event,
-        column: col,
+        column: col!,
         totalColumns: 1,
         top,
         height,

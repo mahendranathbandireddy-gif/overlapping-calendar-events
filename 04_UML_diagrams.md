@@ -72,3 +72,49 @@ stateDiagram-v2
   WidthFinalization --> RenderReady
   RenderReady --> Idle: next update
 ```
+
+## Additional View Mode Sequence
+```mermaid
+sequenceDiagram
+  participant User
+  participant UI as View Mode Controls
+  participant Range as Day Range Resolver
+  participant Engine as Overlap Layout Engine
+
+  User->>UI: Select DAY / WeekDAY / WorkingWeeks
+  UI->>Range: resolve(start, end)
+  Range->>Engine: layout(events, start, end)
+  Engine-->>UI: positionedEvents
+```
+
+## Full Implementation Activity Flow
+```mermaid
+flowchart TD
+  A[Select View Mode] --> B[Resolve dayStart/dayEnd]
+  B --> C[Apply Status Filter]
+  C --> D[Normalize HH:mm to Minutes]
+  D --> E[Clamp to Visible Range]
+  E --> F[Discard Invalid Intervals]
+  F --> G[Sort by Start then End]
+  G --> H[Sweep Active Overlaps]
+  H --> I[Assign/Re-use Columns]
+  I --> J[Finalize Group Widths]
+  J --> K[Compute top/height/left/width]
+  K --> L{WholeWeek?}
+  L -- No --> M[Render Single Timeline]
+  L -- Yes --> N[Run per Day and Render 7 Columns]
+```
+
+## Component Interaction Diagram
+```mermaid
+flowchart LR
+  A[App Container] --> B[CalendarToolbarComponent]
+  A --> C[EventEditPanelComponent]
+  A --> D[DayViewComponent]
+  A --> E[WeekViewComponent]
+
+  B -->|viewChange/filterChange| A
+  C -->|patch/save/cancel| A
+  D -->|edit event| A
+  E -->|edit event| A
+```

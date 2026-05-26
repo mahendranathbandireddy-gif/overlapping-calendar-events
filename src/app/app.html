@@ -1,91 +1,45 @@
 <main class="page">
   <header>
     <p class="eyebrow">Machine Coding Round</p>
-    <h1>Google Calendar Day View Logic</h1>
+    <h1>Google Calendar Day / Week View Logic</h1>
     <p>
       Overlapping events are detected and assigned dynamic columns so they render side-by-side instead of visually colliding.
     </p>
   </header>
 
-  <section class="legend">
-    <span>Visible Events: {{ positionedEvents().length }}</span>
-    <span>Day Window: 08:00 - 21:00</span>
-    <span>Core Focus: overlap + columns + width math</span>
-  </section>
+  <app-calendar-toolbar
+    [visibleCount]="isWeekLayout() ? filteredEvents().length : positionedEvents().length"
+    [activeView]="activeView()"
+    [dayLabel]="dayRange().label"
+    [activeFilter]="activeFilter()"
+    [viewModes]="viewModes"
+    [counts]="statusCounts()"
+    (viewChange)="setView($event)"
+    (filterChange)="setFilter($event)"
+  />
 
-  <section class="filters" aria-label="Event filters">
-    <button type="button" [class.active]="activeFilter() === 'All'" (click)="setFilter('All')">
-      All ({{ statusCounts().all }})
-    </button>
-    <button type="button" [class.active]="activeFilter() === 'Scheduled'" (click)="setFilter('Scheduled')">
-      Scheduled ({{ statusCounts().scheduled }})
-    </button>
-    <button type="button" [class.active]="activeFilter() === 'Completed'" (click)="setFilter('Completed')">
-      Completed ({{ statusCounts().completed }})
-    </button>
-    <button type="button" [class.active]="activeFilter() === 'Cancelled'" (click)="setFilter('Cancelled')">
-      Cancelled ({{ statusCounts().cancelled }})
-    </button>
-  </section>
+  <app-event-edit-panel
+    [draft]="editDraft()"
+    [weekDays]="weekDays"
+    (patch)="onEditPatch($event)"
+    (save)="saveEdit()"
+    (cancel)="cancelEdit()"
+  />
 
-  @if (editDraft()) {
-    <section class="edit-panel" aria-label="Edit event">
-      <h2>Edit Event</h2>
-      <label>
-        Title
-        <input [value]="editDraft()!.title" (input)="updateDraft('title', $any($event.target).value)" />
-      </label>
-      <label>
-        Start
-        <input type="time" [value]="editDraft()!.start" (input)="updateDraft('start', $any($event.target).value)" />
-      </label>
-      <label>
-        End
-        <input type="time" [value]="editDraft()!.end" (input)="updateDraft('end', $any($event.target).value)" />
-      </label>
-      <label>
-        Status
-        <select [value]="editDraft()!.status" (change)="updateDraft('status', $any($event.target).value)">
-          <option value="Scheduled">Scheduled</option>
-          <option value="Completed">Completed</option>
-          <option value="Cancelled">Cancelled</option>
-        </select>
-      </label>
-      <div class="edit-actions">
-        <button type="button" class="save" (click)="saveEdit()">Save</button>
-        <button type="button" class="cancel" (click)="cancelEdit()">Cancel</button>
-      </div>
-    </section>
+  @if (!isWeekLayout()) {
+    <app-day-view
+      [dayHeightPx]="dayHeightPx()"
+      [hourSlotPx]="hourSlotPx()"
+      [hours]="hours()"
+      [events]="positionedEvents()"
+      (edit)="startEdit($event)"
+    />
+  } @else {
+    <app-week-view
+      [dayHeightPx]="dayHeightPx()"
+      [weekEvents]="weekPositionedEvents()"
+      [workingWeek]="activeView() === 'WorkingWeeks'"
+      (edit)="startEdit($event)"
+    />
   }
-
-  <section class="day-view" aria-label="Calendar day view">
-    <div class="time-axis" [style.height.px]="dayHeightPx">
-      @for (hour of hours(); track hour) {
-        <div class="tick" [style.height.px]="$last ? 0 : hourSlotPx">{{ hour }}</div>
-      }
-    </div>
-
-    <div class="grid" [style.height.px]="dayHeightPx">
-      @for (event of positionedEvents(); track trackByEventId($index, event)) {
-        <article
-          class="event-card"
-          [class.completed]="event.status === 'Completed'"
-          [class.cancelled]="event.status === 'Cancelled'"
-          [style.top.px]="event.top"
-          [style.height.px]="event.height"
-          [style.left.%]="event.leftPct"
-          [style.width.%]="event.widthPct"
-          [attr.aria-label]="event.title + ' from ' + event.start + ' to ' + event.end"
-        >
-          <h3>{{ event.title }}</h3>
-          <p>{{ event.start }} - {{ event.end }}</p>
-          <small>col {{ event.column + 1 }}/{{ event.totalColumns }}</small>
-          <div class="status-row">
-            <span class="badge">{{ event.status }}</span>
-            <button type="button" class="edit-btn" (click)="startEdit(event)">Edit</button>
-          </div>
-        </article>
-      }
-    </div>
-  </section>
 </main>

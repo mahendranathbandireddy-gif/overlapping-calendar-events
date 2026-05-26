@@ -1,17 +1,25 @@
-# Compatible Data Structure and Suitable Design Patterns
+# Compatible Data Structures and Complete Design Patterns
 
 ## Data Structures
 
-## Event Types
+## Core Types
+```ts
+type ViewMode = 'DAY' | 'WeekDAY' | 'WorkingWeeks' | 'WholeWeek';
+type EventStatus = 'Scheduled' | 'Completed' | 'Cancelled';
+type WeekDay = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
+```
+
 ```ts
 interface CalendarEventInput {
   id: string;
   title: string;
+  day: WeekDay;
   start: string;
   end: string;
+  status: EventStatus;
 }
 
-interface PositionedEvent {
+interface PositionedEvent extends CalendarEventInput {
   startMin: number;
   endMin: number;
   column: number;
@@ -24,32 +32,65 @@ interface PositionedEvent {
 ```
 
 ## Runtime Structures
-- `Array<PositionedEvent>`: sorted timeline traversal.
-- `active[]`: currently overlapping events.
-- `freeCols[]`: reusable column indexes.
-- scalar `nextCol`: next new column index.
+- `Array<CalendarEventInput>`: source events
+- `Array<PositionedEvent>`: layout output
+- `active[]`: active overlap set during sweep
+- `freeCols[]`: recycled column indices
+- scalar `nextCol`: next available column
 
-## Why these fit
-- Array sorting gives deterministic order.
-- Active list mirrors sweep-line state.
-- Free column pool minimizes column count.
-- Simple primitives keep debugging and whiteboard explanation easy.
+## Why These Work
+- Arrays keep iteration straightforward and interview-friendly.
+- Active/free lists represent real overlap lifecycle.
+- Column reuse minimizes width fragmentation.
 
-## Design Patterns
+## Complete Design Pattern Mapping
 
 ## 1. Strategy Pattern
-Support alternate layout policies:
-- strict no-overlap columns
-- compact packed layout
-- priority-weighted layout
+Different timeline modes are strategies for choosing range policy:
+- `DAY`: 00:00-24:00
+- `WeekDAY`: 08:00-21:00
+- `WorkingWeeks`: 09:00-18:00
+- `WholeWeek`: per-day columns, same range policy
 
-## 2. Template Method (optional)
-Shared pipeline:
-- normalize -> sort -> assign columns -> finalize widths
-Different rules can override assignment/finalization steps.
+## 2. Template Method Pattern
+Fixed processing pipeline:
+1. normalize
+2. filter invalid
+3. sort
+4. assign columns
+5. finalize widths
 
-## 3. Observer/Reactive Pattern
-UI listens to computed positioned events and rerenders automatically.
+Only input policy (range/filter/day split) varies.
 
-## 4. Factory (optional)
-Factory for generating test scenarios (dense overlap, chain overlap, same-start cases).
+## 3. Observer / Reactive Pattern
+Signals and computed values act as observers:
+- changing filter/view/edit updates positioned output automatically.
+
+## 4. Single Responsibility Principle (SOLID influence)
+- Range resolution
+- Event filtering
+- Layout computation
+- Presentation rendering
+are separated concerns.
+
+## 5. Facade Pattern (conceptual)
+`layoutEvents(...)` behaves like a facade hiding overlap complexity and returning render-ready output.
+
+## 6. State Pattern (lightweight)
+UI behavior depends on state:
+- active view mode
+- active filter
+- edit draft state
+
+## 7. Factory Pattern (test-data friendly)
+Mock events can be generated with scenario factories for dense overlaps, ties, chains, boundary clipping.
+
+## Component-Level Pattern Application
+- Container-Presenter split:
+  - Container: `App` (state, computations, algorithm)
+  - Presenters: toolbar/edit/day/week components
+- Unidirectional data flow:
+  - parent -> `@Input`
+  - child -> `@Output`
+
+This improves testability and reuse for machine-coding evolution rounds.
